@@ -37,9 +37,10 @@ struct Item {
     }
 };
 
+// Generate items (value, weight, value/weight)
 vector<Item> make_items(int n) {
     const int SEED = 100;
-    std::mt19937 rng(SEED);
+    mt19937 rng(SEED);
 
     vector<Item> items(n);
     for (int i = 0; i < n; ++i) {
@@ -50,17 +51,19 @@ vector<Item> make_items(int n) {
     return items;
 }
 
+// Compare by value-to-weight ratio (descending)
 bool cmp_value_per_weight(const Item& a, const Item& b) {
     return a.value_per_weight > b.value_per_weight;
 }
 
 struct cmp {
+    // Priority Queue: max-heap by bound
     bool operator()(const Item& a, const Item& b) {
         return a.bound < b.bound;
     }
 };
 
-// 완전탐색 함수
+// Brute-force (2^n subsets)
 int Brute_force(const vector<Item>& items, int capacity) {
     int n = (int)items.size();
     uint64_t total = 1ULL << n;  // 2^n
@@ -73,14 +76,11 @@ int Brute_force(const vector<Item>& items, int capacity) {
         for (int i = 0; i < n; i++) {
             if (mask & (1ULL << i)) {
                 w_sum += items[i].weight;
-                if (w_sum > capacity) {
-                    // 용량 초과이면 더 볼 필요 없음
-                    break;
-                }
+                if (w_sum > capacity) break;  // Over capacity → skip
                 v_sum += items[i].value;
             }
         }
-        // 용량 안 넘고, 이익이 최대치면 갱신
+        // update if better & within capacity
         if (w_sum <= capacity && v_sum > best) {
             best = v_sum;
         }
@@ -89,22 +89,24 @@ int Brute_force(const vector<Item>& items, int capacity) {
     return best;
 }
 
+// Greedy: pick items by value/weight until full
 int Greedy(const vector<Item>& items, int capacity, int start = 0, int curr_weight = 0) {
     const int n = items.size();
     int v_sum = 0;
-    // 무게 초과하기 직전까지 담기
+    // fill until weight limit
     for (int i = start; i < n; i++) {
         if (curr_weight + items[i].weight <= capacity) {
             curr_weight += items[i].weight;
             v_sum += items[i].value;
         } else {
-            v_sum += items[i].value_per_weight * (capacity - curr_weight);  // 초과하면 가치 / 무게 * 남은 용량
+            v_sum += items[i].value_per_weight * (capacity - curr_weight);  // add fractional value
             break;
         }
     }
     return v_sum;
 }
 
+// Dynamic Programming (0/1 Knapsack)
 int DP(const vector<Item>& items, int capacity) {
     const int n = items.size();
     vector<vector<int>> dp(n + 1, vector<int>(capacity + 1));
@@ -128,21 +130,20 @@ int DP(const vector<Item>& items, int capacity) {
     return dp[n][capacity];
 }
 
+// Branch and Bound
 int BnB(const vector<Item>& items, int capacity) {
     const int n = items.size();
     int max_benefit = 0;
     priority_queue<Item, vector<Item>, cmp> heap;
-    Item cur_node, left_node, right_node;  // 현재, 왼쪽(물건 담음), 오른쪽 (물건 안담음)
+    Item cur_node, left_node, right_node;  // current, left (include), right (exclude)
     cur_node.bound = Greedy(items, capacity);
     heap.push(cur_node);
-    // 현재 위치에서 이 물건을 넣을 수 있는가?
-    // 바운드가 맥스 베네핏보다 큰가?
     while (!heap.empty()) {
         cur_node = heap.top();
         heap.pop();
-        if (cur_node.bound <= max_benefit) continue;  // 필요없는 노드는 패스
+        if (cur_node.bound <= max_benefit) continue;  // skip if not promising
 
-        if (cur_node.weight + items[cur_node.item_idx].weight <= capacity) {  // 만약 넣을 수 있다면
+        if (cur_node.weight + items[cur_node.item_idx].weight <= capacity) {  // if includable
             left_node.value = cur_node.value + items[cur_node.item_idx].value;
             left_node.weight = cur_node.weight + items[cur_node.item_idx].weight;
             left_node.item_idx = cur_node.item_idx + 1;
