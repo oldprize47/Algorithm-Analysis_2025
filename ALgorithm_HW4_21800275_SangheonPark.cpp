@@ -1,23 +1,40 @@
 /*
-    (1) Lecture slide chapter 6. page 14
-    (2) Blog: ** URL here **
+    (1) Lecture slide chapter 6. page 14,27
+    (2) Blog:   https://min-zero.tistory.com/entry/C-%EA%B8%B0%EB%B3%B8-%EA%B3%B5%EB%B6%80%EC%A0%95%EB%A6%AC-9-%EA%B5%AC%EC%A1%B0%EC%B2%B4struct (구조체 생성자)
+                https://jungeu1509.github.io/algorithm/use-priorityqueue/#11-%ED%97%A4%EB%8D%94 (우선 순위 큐)
+                https://hwan-shell.tistory.com/119 (vector)
+                https://blog.naver.com/thebaleuncoding/221922917364 (문자열 간격)
     (3) Book: -
     (4) Hyperscale AI: ChatGPT
 */
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <iomanip>
 #include <iostream>
+#include <queue>
 #include <random>
 #include <vector>
 
 using namespace std;
 using namespace chrono;
+int col1 = 18, col2 = 80;
 
 struct Item {
-    int weight;
     int value;
+    int weight;
     double value_per_weight;
+    double bound;
+    int item_idx;
+    Item(int v, int w, double vpw) : value(v), weight(w), value_per_weight(vpw) {}
+    Item() {
+        value = 0;
+        weight = 0;
+        value_per_weight = 0;
+        bound = 0;
+        item_idx = 0;
+    }
 };
 
 vector<Item> make_items(int n) {
@@ -28,7 +45,7 @@ vector<Item> make_items(int n) {
     for (int i = 0; i < n; ++i) {
         int v = rng() % 500 + 1;
         int w = rng() % 100 + 1;
-        items[i] = {w, v, 1.0 * v / w};
+        items[i] = {v, w, 1.0 * v / w};
     }
     return items;
 }
@@ -37,14 +54,20 @@ bool cmp_value_per_weight(const Item& a, const Item& b) {
     return a.value_per_weight > b.value_per_weight;
 }
 
+struct cmp {
+    bool operator()(const Item& a, const Item& b) {
+        return a.bound < b.bound;
+    }
+};
+
 // 완전탐색 함수
-long long Brute_force(const vector<Item>& items, int capacity) {
+int Brute_force(const vector<Item>& items, int capacity) {
     int n = (int)items.size();
     uint64_t total = 1ULL << n;  // 2^n
-    long long best = 0;
+    int best = 0;
 
     for (uint64_t mask = 0; mask < total; ++mask) {
-        long long w_sum = 0, v_sum = 0;
+        int w_sum = 0, v_sum = 0;
 
         // mask 비트마다 포함 여부 체크
         for (int i = 0; i < n; i++) {
@@ -66,27 +89,25 @@ long long Brute_force(const vector<Item>& items, int capacity) {
     return best;
 }
 
-long long Greedy(vector<Item> items, int capacity) {
+int Greedy(const vector<Item>& items, int capacity, int start = 0, int curr_weight = 0) {
     const int n = items.size();
-    long long w_sum = 0, v_sum = 0;
-    // 가성비 순으로 정렬
-    sort(items.begin(), items.end(), cmp_value_per_weight);
+    int v_sum = 0;
     // 무게 초과하기 직전까지 담기
-    for (int i = 0; i < n; i++) {
-        if (w_sum + items[i].weight <= capacity) {
-            w_sum += items[i].weight;
+    for (int i = start; i < n; i++) {
+        if (curr_weight + items[i].weight <= capacity) {
+            curr_weight += items[i].weight;
             v_sum += items[i].value;
         } else {
-            v_sum += items[i].value_per_weight * (capacity - w_sum);  // 초과하면 가치 / 무게 * 남은 용량
+            v_sum += items[i].value_per_weight * (capacity - curr_weight);  // 초과하면 가치 / 무게 * 남은 용량
             break;
         }
     }
     return v_sum;
 }
 
-long long DP(const vector<Item>& items, int capacity) {
+int DP(const vector<Item>& items, int capacity) {
     const int n = items.size();
-    vector<vector<long long>> dp(n + 1, vector<long long>(capacity + 1));
+    vector<vector<int>> dp(n + 1, vector<int>(capacity + 1));
 
     for (int w = 0; w <= capacity; w++) dp[0][w] = 0;
     for (int i = 1; i <= n; i++) {
@@ -107,74 +128,118 @@ long long DP(const vector<Item>& items, int capacity) {
     return dp[n][capacity];
 }
 
-long long BnB(vector<Item> items, int capacity) {
+int BnB(const vector<Item>& items, int capacity) {
     const int n = items.size();
-    long long w_sum = 0, v_sum = 0;
-    // 가성비 순으로 정렬
-    sort(items.begin(), items.end(), cmp_value_per_weight);
-    // 무게 초과하기 직전까지 담기
-    for (int i = 0; i < n; i++) {
-        if (w_sum + items[i].weight <= capacity) {
-            w_sum += items[i].weight;
-            v_sum += items[i].value;
-        } else {
-            v_sum += items[i].value_per_weight * (capacity - w_sum);  // 초과하면 가치 / 무게 * 남은 용량
-            break;
+    int max_benefit = 0;
+    priority_queue<Item, vector<Item>, cmp> heap;
+    Item cur_node, left_node, right_node;  // 현재, 왼쪽(물건 담음), 오른쪽 (물건 안담음)
+    cur_node.bound = Greedy(items, capacity);
+    heap.push(cur_node);
+    // 현재 위치에서 이 물건을 넣을 수 있는가?
+    // 바운드가 맥스 베네핏보다 큰가?
+    while (!heap.empty()) {
+        cur_node = heap.top();
+        heap.pop();
+        if (cur_node.bound <= max_benefit) continue;  // 필요없는 노드는 패스
+
+        if (cur_node.weight + items[cur_node.item_idx].weight <= capacity) {  // 만약 넣을 수 있다면
+            left_node.value = cur_node.value + items[cur_node.item_idx].value;
+            left_node.weight = cur_node.weight + items[cur_node.item_idx].weight;
+            left_node.item_idx = cur_node.item_idx + 1;
+            left_node.bound = left_node.value + Greedy(items, capacity, cur_node.item_idx + 1, left_node.weight);
+            if (left_node.item_idx < n)
+                heap.push(left_node);
+            if (left_node.value > max_benefit) max_benefit = left_node.value;
         }
+        right_node.value = cur_node.value;
+        right_node.weight = cur_node.weight;
+        right_node.item_idx = cur_node.item_idx + 1;
+        right_node.bound = right_node.value + Greedy(items, capacity, cur_node.item_idx + 1, right_node.weight);
+        if (right_node.item_idx < n)
+            heap.push(right_node);
     }
-    return v_sum;
+
+    return max_benefit;
+}
+void print_line() {
+    cout << left << setw(col1 + col2 + 3) << "---------------------------------------------------------------------------------------------------------" << endl;
+}
+void print_title1() {
+    cout << "\n 1) Brute Force" << endl;
+    print_line();
+    cout << left << setw(col1) << " Number of Items" << " | " << setw(col2) << "                   Processing time in milliseconds / Max benefit                   |" << endl;
+    print_line();
 }
 
+void print_title2() {
+    cout << " 2) Others" << endl;
+    print_line();
+    cout << left << setw(col1) << "    Number of" << " | " << setw(col2) << "                   Processing time in milliseconds / Max benefit                   |" << endl;
+    cout << left << setw(col1) << " " << " | " << setw(col2) << "------------------------------------------------------------------------------------" << endl;
+    cout << left << setw(col1) << "      Items" << " | " << setw(col2) << "            Greedy         |           D. P.           |           B. & B.         |" << endl;
+    print_line();
+}
+void print_time_benefit(double processing_time, int max_benefit) {
+    cout << right << setw(13) << processing_time << setw(3) << " / " << left << setw(11) << max_benefit << "|";
+}
 int main() {
     std::chrono::high_resolution_clock::time_point start, end;
-    int n = 0;
-    cout << "Enter the number of Items (N): ";
-    cin >> n;
-    vector<Item> items = make_items(n);
-    int capacity = n * 25;
-    // cout << endl
-    //      << endl
-    //      << "After sorting" << endl
-    //      << endl;
-    // for (int i = 0; i < n; i++) cout << "items[" << i << "]: Value = " << items[i].value << ", Weight = " << items[i].weight << ", Value_per_Weight = " << items[i].value_per_weight << endl;
 
-    if (n < 31) {  // Bruth force
+    vector<vector<Item>> items(7);
+    vector<int> capacity(7);
+    vector<int> size_num = {11, 21, 31, 10, 100, 1000, 10000};
+    int max_benefit = 0;
+    double processing_time = 0;
+    double total_minute = 0;
+    print_title1();
+    for (int i = 0; i < 3; i++) {  // Did not implement brute force for (data size > 31)
+        items[i] = make_items(size_num[i]);
+        capacity[i] = size_num[i] * 25;
+
+        // Brute Force
         start = high_resolution_clock::now();
-        long long Brute_force_best = Brute_force(items, capacity);
+        max_benefit = Brute_force(items[i], capacity[i]);
         end = high_resolution_clock::now();
-        auto Brute_force_duration = duration<double, milli>(end - start).count();
-
-        cout << endl;
-        cout << "-------------------------------------" << endl;
-        cout << "Processing time in milliseconds(Brute_force): " << Brute_force_duration << " milliseconds" << endl
-             << endl;
-        cout << "Maximum benefit value (Brute_force): " << Brute_force_best << endl
-             << endl;
+        processing_time = duration<double, milli>(end - start).count();
+        total_minute += processing_time;
+        cout << right << setw(col1 - 5) << size_num[i] << "      | " << setw(35) << processing_time << setw(5) << "  /  " << left << setw(43) << max_benefit << "|" << endl;
+        print_line();
     }
-
-    start = high_resolution_clock::now();
-    long long Greedy_best = Greedy(items, capacity);
-    end = high_resolution_clock::now();
-    auto Greedy_duration = duration<double, milli>(end - start).count();
-
     cout << endl;
-    cout << "-------------------------------------" << endl;
-    cout << "Processing time in milliseconds(Greedy): " << Greedy_duration << " milliseconds" << endl
-         << endl;
-    cout << "Maximum benefit value (Greedy): " << Greedy_best << endl
-         << endl;
+    print_title2();
+    for (int i = 3; i < 7; i++) {
+        items[i] = make_items(size_num[i]);
+        capacity[i] = size_num[i] * 25;
+        cout << right << setw(col1 - 5) << size_num[i] << "      | ";
+        // 가성비 순으로 정렬
+        sort(items[i].begin(), items[i].end(), cmp_value_per_weight);
 
-    start = high_resolution_clock::now();
-    long long DP_best = DP(items, capacity);
-    end = high_resolution_clock::now();
-    auto DP_duration = duration<double, milli>(end - start).count();
-
-    cout << endl;
-    cout << "-------------------------------------" << endl;
-    cout << "Processing time in milliseconds(DP): " << DP_duration << " milliseconds" << endl
+        // Greedy
+        start = high_resolution_clock::now();
+        max_benefit = Greedy(items[i], capacity[i]);
+        end = high_resolution_clock::now();
+        processing_time = duration<double, milli>(end - start).count();
+        print_time_benefit(processing_time, max_benefit);
+        total_minute += processing_time;
+        // Dynamic programming
+        start = high_resolution_clock::now();
+        max_benefit = DP(items[i], capacity[i]);
+        end = high_resolution_clock::now();
+        processing_time = duration<double, milli>(end - start).count();
+        print_time_benefit(processing_time, max_benefit);
+        total_minute += processing_time;
+        // Branch & Bound
+        start = high_resolution_clock::now();
+        max_benefit = BnB(items[i], capacity[i]);
+        end = high_resolution_clock::now();
+        processing_time = duration<double, milli>(end - start).count();
+        print_time_benefit(processing_time, max_benefit);
+        total_minute += processing_time;
+        // next
+        cout << endl;
+        print_line();
+    }
+    cout << "\nTotal minute : " << total_minute / 60000.0 << " min" << endl
          << endl;
-    cout << "Maximum benefit value (DP): " << DP_best << endl
-         << endl;
-
     return 0;
 }
