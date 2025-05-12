@@ -1,11 +1,14 @@
 /*
     (1) Lecture slide chapter 6. page 14,27
-    (2) Blog:   https://min-zero.tistory.com/entry/C-%EA%B8%B0%EB%B3%B8-%EA%B3%B5%EB%B6%80%EC%A0%95%EB%A6%AC-9-%EA%B5%AC%EC%A1%B0%EC%B2%B4struct (구조체 생성자)
-                https://jungeu1509.github.io/algorithm/use-priorityqueue/#11-%ED%97%A4%EB%8D%94 (우선 순위 큐)
+    (2) Blog:   https://edukoi.tistory.com/88 (Struct Sorting)
+                https://min-zero.tistory.com/entry/C-%EA%B8%B0%EB%B3%B8-%EA%B3%B5%EB%B6%80%EC%A0%95%EB%A6%AC-9-%EA%B5%AC%EC%A1%B0%EC%B2%B4struct (Struct Constructor)
+                https://jungeu1509.github.io/algorithm/use-priorityqueue/#11-%ED%97%A4%EB%8D%94 (Priority Queue)
                 https://hwan-shell.tistory.com/119 (vector)
-                https://blog.naver.com/thebaleuncoding/221922917364 (문자열 간격)
+                https://blog.naver.com/thebaleuncoding/221922917364 (String Spacing)
     (3) Book: -
     (4) Hyperscale AI: ChatGPT
+
+    ** It takes 3.56 minutes in VSCode, but 14.5 minutes in CMD. **
 */
 
 #include <algorithm>
@@ -184,22 +187,22 @@ void print_time_benefit(double processing_time, int max_benefit) {
     cout << right << setw(13) << processing_time << setw(3) << " / " << left << setw(11) << max_benefit << "|";
 }
 int main() {
-    std::chrono::high_resolution_clock::time_point start, end;
+    high_resolution_clock::time_point start, end;
 
-    vector<vector<Item>> items(7);
-    vector<int> capacity(7);
+    vector<Item> items;
+    int capacity;
     vector<int> size_num = {11, 21, 31, 10, 100, 1000, 10000};
     int max_benefit = 0;
     double processing_time = 0;
     double total_minute = 0;
     print_title1();
     for (int i = 0; i < 3; i++) {  // Did not implement brute force for (data size > 31)
-        items[i] = make_items(size_num[i]);
-        capacity[i] = size_num[i] * 25;
+        items = make_items(size_num[i]);
+        capacity = size_num[i] * 25;
 
         // Brute Force
         start = high_resolution_clock::now();
-        max_benefit = Brute_force(items[i], capacity[i]);
+        max_benefit = Brute_force(items, capacity);
         end = high_resolution_clock::now();
         processing_time = duration<double, milli>(end - start).count();
         total_minute += processing_time;
@@ -209,29 +212,29 @@ int main() {
     cout << endl;
     print_title2();
     for (int i = 3; i < 7; i++) {
-        items[i] = make_items(size_num[i]);
-        capacity[i] = size_num[i] * 25;
+        items = make_items(size_num[i]);
+        capacity = size_num[i] * 25;
         cout << right << setw(col1 - 5) << size_num[i] << "      | ";
         // 가성비 순으로 정렬
-        sort(items[i].begin(), items[i].end(), cmp_value_per_weight);
+        sort(items.begin(), items.end(), cmp_value_per_weight);
 
         // Greedy
         start = high_resolution_clock::now();
-        max_benefit = Greedy(items[i], capacity[i]);
+        max_benefit = Greedy(items, capacity);
         end = high_resolution_clock::now();
         processing_time = duration<double, milli>(end - start).count();
         print_time_benefit(processing_time, max_benefit);
         total_minute += processing_time;
         // Dynamic programming
         start = high_resolution_clock::now();
-        max_benefit = DP(items[i], capacity[i]);
+        max_benefit = DP(items, capacity);
         end = high_resolution_clock::now();
         processing_time = duration<double, milli>(end - start).count();
         print_time_benefit(processing_time, max_benefit);
         total_minute += processing_time;
         // Branch & Bound
         start = high_resolution_clock::now();
-        max_benefit = BnB(items[i], capacity[i]);
+        max_benefit = BnB(items, capacity);
         end = high_resolution_clock::now();
         processing_time = duration<double, milli>(end - start).count();
         print_time_benefit(processing_time, max_benefit);
@@ -242,5 +245,6 @@ int main() {
     }
     cout << "\nTotal minute : " << total_minute / 60000.0 << " min" << endl
          << endl;
+
     return 0;
 }
